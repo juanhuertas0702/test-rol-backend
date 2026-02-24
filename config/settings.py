@@ -127,6 +127,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Cuando despliegues el frontend, lo cambiarás a esto:
 CORS_ALLOWED_ORIGINS = [
-    "https://test-eight-gray-60.vercel.app/",
+    "https://test-eight-gray-60.vercel.app",
     "http://localhost:5173",
 ]
