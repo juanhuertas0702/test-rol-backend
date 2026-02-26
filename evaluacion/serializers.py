@@ -1,15 +1,12 @@
 from rest_framework import serializers
-from django.contrib.auth.hashers import make_password
-from .models import Postulante
+from .models import Postulante, ResultadoTest
 
 class PostulanteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Postulante
-        fields = '__all__'
-        # Esto evita que la contraseña se envíe de vuelta por seguridad
-        extra_kwargs = {'contrasena': {'write_only': True}} 
+        fields = ['id', 'nombre_completo', 'id_usuario', 'es_admin', 'fecha_registro']
 
-    # Esta función encripta la contraseña justo antes de guardarla
-    def create(self, validated_data):
-        validated_data['contrasena'] = make_password(validated_data.get('contrasena'))
-        return super().create(validated_data)
+class ResultadoTestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResultadoTest
+        fields = ['id', 'postulante', 'puntaje_total', 'respuestas_detalle', 'fecha_prueba']

@@ -1,34 +1,56 @@
 from rest_framework import generics
-from .models import Postulante
-from .serializers import PostulanteSerializer
+from .models import Postulante, ResultadoTest
+from .serializers import PostulanteSerializer, ResultadoTestSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.hashers import check_password
 
-# CreateAPIView automáticamente maneja las peticiones POST para crear registros
-class RegistroPostulanteView(generics.CreateAPIView):
-    queryset = Postulante.objects.all()
-    serializer_class = PostulanteSerializer
-
 class LoginView(APIView):
     def post(self, request):
         nombre = request.data.get('nombre')
-        contrasena = request.data.get('contrasena')
-
+        es_admin = request.data.get('es_admin', False)
+        
         try:
-            # Buscamos al postulante por su nombre
-            postulante = Postulante.objects.get(nombre_completo=nombre)
-            
-            # Comparamos la contraseña encriptada
-            if check_password(contrasena, postulante.contrasena):
-                return Response({
-                    "mensaje": "Login exitoso", 
-                    "postulante_id": postulante.id,
-                    "nombre": postulante.nombre_completo
-                }, status=status.HTTP_200_OK)
+            if es_admin:
+                # Login para admin: nombre + contraseña
+                contrasena = request.data.get('contrasena')
+                postulante = Postulante.objects.get(nombre_completo=nombre, es_admin=True)
+                
+                # Verificar contraseña
+                if not check_password(contrasena, postulante.contrasena):
+                    return Response({"error": "Contraseña incorrecta"}, status=status.HTTP_401_UNAUTHORIZED)
             else:
-                return Response({"error": "Contraseña incorrecta"}, status=status.HTTP_401_UNAUTHORIZED)
+                # Login para usuario normal: nombre + ID usuario
+                id_usuario = request.data.get('id_usuario')
+                postulante = Postulante.objects.get(nombre_completo=nombre, id_usuario=id_usuario, es_admin=False)
+            
+            return Response({
+                "mensaje": "Login exitoso", 
+                "postulante_id": postulante.id,
+                "nombre": postulante.nombre_completo,
+                "id_usuario": postulante.id_usuario,
+                "es_admin": postulante.es_admin
+            }, status=status.HTTP_200_OK)
                 
         except Postulante.DoesNotExist:
-            return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Usuario o credenciales incorrecto"}, status=status.HTTP_401_UNAUTHORIZED)
+
+class AdminView(APIView):
+    def get(self, request):
+        # Verificar si el usuario es admin
+        admin_id = request.headers.get('X-Admin-ID')
+        
+        try:
+            admin = Postulante.objects.get(es_admin=True, id=admin_id)
+        except Postulante.DoesNotExist:
+            return Response({"error": "No autorizado"}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Obtener todos los resultados de tests
+        resultados = ResultadoTest.objects.select_related('postulante').all()
+        serializer = ResultadoTestSerializer(resultados, many=True)
+        
+        return Response({
+            "success": True,
+            "resultados": serializer.data
+        }, status=status.HTTP_200_OK)
