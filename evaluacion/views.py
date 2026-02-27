@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.hashers import check_password
+from collections import Counter
 
 class LoginView(APIView):
     def post(self, request):
@@ -36,6 +37,56 @@ class LoginView(APIView):
         except Postulante.DoesNotExist:
             return Response({"error": "Usuario o credenciales incorrecto"}, status=status.HTTP_401_UNAUTHORIZED)
 
+class VerifyTestView(APIView):
+    """Verificar si el usuario ya respondió el test"""
+    def get(self, request):
+        postulante_id = request.query_params.get('postulante_id')
+        
+        try:
+            resultado = ResultadoTest.objects.filter(postulante_id=postulante_id).latest('fecha_prueba')
+            return Response({
+                "ya_respondio": True,
+                "fecha_prueba": resultado.fecha_prueba.strftime('%d/%m/%Y %H:%M:%S'),
+                "rol_principal": resultado.rol_principal
+            }, status=status.HTTP_200_OK)
+        except ResultadoTest.DoesNotExist:
+            return Response({
+                "ya_respondio": False
+            }, status=status.HTTP_200_OK)
+
+class GuardarTestView(APIView):
+    """Guardar las respuestas del test"""
+    def post(self, request):
+        try:
+            postulante_id = request.data.get('postulante_id')
+            respuestas = request.data.get('respuestas', [])
+            rol_principal = request.data.get('rol_principal')
+            scores = request.data.get('scores', {})
+            
+            # Calcular puntaje total
+            puntaje_total = sum(scores.values()) if scores else 0
+            
+            postulante = Postulante.objects.get(id=postulante_id)
+            
+            resultado = ResultadoTest.objects.create(
+                postulante=postulante,
+                respuestas_detalle=respuestas,
+                scores=scores,
+                rol_principal=rol_principal,
+                puntaje_total=puntaje_total
+            )
+            
+            return Response({
+                "success": True,
+                "message": "Test guardado correctamente",
+                "resultado_id": resultado.id
+            }, status=status.HTTP_201_CREATED)
+            
+        except Postulante.DoesNotExist:
+            return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class AdminView(APIView):
     def get(self, request):
         # Verificar si el usuario es admin
@@ -54,3 +105,36 @@ class AdminView(APIView):
             "success": True,
             "resultados": serializer.data
         }, status=status.HTTP_200_OK)
+
+class EstadisticasView(APIView):
+    """Obtener estadísticas de perfiles"""
+    def get(self, request):
+        admin_id = request.headers.get('X-Admin-ID')
+        
+        try:
+            admin = Postulante.objects.get(es_admin=True, id=admin_id)
+        except Postulante.DoesNotExist:
+            return Response({"error": "No autorizado"}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Contar perfiles
+        resultados = ResultadoTest.objects.all()
+        roles = [r.rol_principal for r in resultados]
+        
+        rol_map = {
+            'A': 'Clarificador',
+            'B': 'Ideador',
+            'C': 'Desarrollador',
+            'D': 'Implementador'
+        }
+        
+        # Contar ocurrencias
+        conteo = Counter(roles)
+        
+        estadisticas = {
+            'total_tests': resultados.count(),
+            'perfiles': {
+                rol_map.get(k, k): v for k, v in conteo.items()
+            }
+        }
+        
+        return Response(estadisticas, status=status.HTTP_200_OK)

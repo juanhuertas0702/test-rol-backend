@@ -10,19 +10,17 @@ class Postulante(models.Model):
     def __str__(self):
         return self.nombre_completo
 
-    def __str__(self):
-        return self.nombre_completo
 
 class ResultadoTest(models.Model):
-    # Conectamos el resultado con el postulante
     postulante = models.ForeignKey(Postulante, on_delete=models.CASCADE, related_name='resultados')
-    puntaje_total = models.IntegerField()
-    
-    # Opcional pero muy recomendado: un campo JSON para guardar exactamente qué 
-    # respondió en la pregunta 8, la 11, etc.
-    respuestas_detalle = models.JSONField(blank=True, null=True) 
+    respuestas_detalle = models.JSONField(default=list, blank=True)
+    scores = models.JSONField(default=dict, blank=True)
+    rol_principal = models.CharField(max_length=1, default='A')
+    puntaje_total = models.IntegerField(default=0)
     fecha_prueba = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ['-fecha_prueba']
+
     def __str__(self):
-        return f"{self.postulante.nombre_completo} - Puntaje: {self.puntaje_total}"
-# Create your models here.
+        return f"{self.postulante.nombre_completo} - {self.rol_principal}"
