@@ -92,13 +92,18 @@ class AdminView(APIView):
         # Verificar si el usuario es admin
         admin_id = request.headers.get('X-Admin-ID')
         
-        try:
-            admin = Postulante.objects.get(es_admin=True, id=admin_id)
-        except Postulante.DoesNotExist:
-            return Response({"error": "No autorizado"}, status=status.HTTP_403_FORBIDDEN)
+        # Validar que admin_id sea un número entero válido
+        if not admin_id:
+            return Response({"error": "No autorizado - Admin ID requerido"}, status=status.HTTP_403_FORBIDDEN)
         
-        # Obtener todos los resultados de tests
-        resultados = ResultadoTest.objects.select_related('postulante').all()
+        try:
+            # Verificar que el usuario existe y sea admin
+            admin = Postulante.objects.get(id=int(admin_id), es_admin=True)
+        except (Postulante.DoesNotExist, ValueError):
+            return Response({"error": "No autorizado - Usuario no es admin"}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Obtener todos los resultados de tests (cualquier admin puede verlos todos)
+        resultados = ResultadoTest.objects.select_related('postulante').all().order_by('-fecha_prueba')
         serializer = ResultadoTestSerializer(resultados, many=True)
         
         return Response({
@@ -111,29 +116,31 @@ class EstadisticasView(APIView):
     def get(self, request):
         admin_id = request.headers.get('X-Admin-ID')
         
+        # Validar que admin_id sea un número entero válido
+        if not admin_id:
+            return Response({"error": "No autorizado - Admin ID requerido"}, status=status.HTTP_403_FORBIDDEN)
+        
         try:
-            admin = Postulante.objects.get(es_admin=True, id=admin_id)
-        except Postulante.DoesNotExist:
-            return Response({"error": "No autorizado"}, status=status.HTTP_403_FORBIDDEN)
+            # Verificar que el usuario existe y sea admin
+            admin = Postulante.objects.get(id=int(admin_id), es_admin=True)
+        except (Postulante.DoesNotExist, ValueError):
+            return Response({"error": "No autorizado - Usuario no es admin"}, status=status.HTTP_403_FORBIDDEN)
         
         # Contar perfiles
         resultados = ResultadoTest.objects.all()
-        roles = [r.rol_principal for r in resultados]
+        roles = [r.rol_principal for r in resultados if r.rol_principal]
         
-        rol_map = {
-            'A': 'Clarificador',
-            'B': 'Ideador',
-            'C': 'Desarrollador',
-            'D': 'Implementador'
-        }
-        
-        # Contar ocurrencias
+        # Contar ocurrencias de cada rol
         conteo = Counter(roles)
         
+        # Devolver con las letras A, B, C, D
         estadisticas = {
             'total_tests': resultados.count(),
             'perfiles': {
-                rol_map.get(k, k): v for k, v in conteo.items()
+                'A': conteo.get('A', 0),
+                'B': conteo.get('B', 0),
+                'C': conteo.get('C', 0),
+                'D': conteo.get('D', 0)
             }
         }
         
