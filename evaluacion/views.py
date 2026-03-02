@@ -63,11 +63,20 @@ class GuardarTestView(APIView):
             rol_principal = request.data.get('rol_principal')
             scores = request.data.get('scores', {})
             
+            # Validar que tengamos los datos requeridos
+            if not postulante_id or not rol_principal:
+                return Response(
+                    {"error": "postulante_id y rol_principal son requeridos"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             # Calcular puntaje total
             puntaje_total = sum(scores.values()) if scores else 0
             
+            # Buscar el postulante
             postulante = Postulante.objects.get(id=postulante_id)
             
+            # Crear el registro de resultado
             resultado = ResultadoTest.objects.create(
                 postulante=postulante,
                 respuestas_detalle=respuestas,
@@ -76,6 +85,8 @@ class GuardarTestView(APIView):
                 puntaje_total=puntaje_total
             )
             
+            print(f"✅ Test guardado: Usuario {postulante.nombre_completo}, Rol: {rol_principal}, ID: {resultado.id}")
+            
             return Response({
                 "success": True,
                 "message": "Test guardado correctamente",
@@ -83,9 +94,16 @@ class GuardarTestView(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except Postulante.DoesNotExist:
-            return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": f"Usuario con ID {postulante_id} no encontrado"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            print(f"❌ Error al guardar test: {str(e)}")
+            return Response(
+                {"error": f"Error al guardar test: {str(e)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class AdminView(APIView):
     def get(self, request):
