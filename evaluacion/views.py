@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.hashers import check_password
 from collections import Counter
+import random
+from django.utils import timezone
 
 class LoginView(APIView):
     def post(self, request):
@@ -163,3 +165,69 @@ class EstadisticasView(APIView):
         }
         
         return Response(estadisticas, status=status.HTTP_200_OK)
+
+
+class GenerarDatosView(APIView):
+    """Generar 500 pruebas de ejemplo para testing"""
+    def post(self, request):
+        admin_id = request.headers.get('X-Admin-ID')
+        
+        # Validar que admin_id sea un número entero válido
+        if not admin_id:
+            return Response({"error": "No autorizado - Admin ID requerido"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            # Verificar que el usuario existe y sea admin
+            admin = Postulante.objects.get(id=int(admin_id), es_admin=True)
+        except (Postulante.DoesNotExist, ValueError):
+            return Response({"error": "No autorizado - Usuario no es admin"}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Limpiar ResultadoTest anteriores (opcional)
+        ResultadoTest.objects.all().delete()
+        
+        roles = ['A', 'B', 'C', 'D']
+        pruebas_creadas = 0
+        
+        # Crear 500 pruebas de ejemplo
+        for i in range(1, 501):
+            # Crear usuario si no existe
+            nombre = f"Usuario Test {i}"
+            id_usuario = f"test-{i}"
+            
+            postulante, created = Postulante.objects.get_or_create(
+                nombre_completo=nombre,
+                id_usuario=id_usuario,
+                defaults={'es_admin': False}
+            )
+            
+            # Generar scores aleatorios
+            rol_random = random.choice(roles)
+            scores = {
+                'A': random.randint(5, 25),
+                'B': random.randint(5, 25),
+                'C': random.randint(5, 25),
+                'D': random.randint(5, 25)
+            }
+            puntaje_total = sum(scores.values())
+            
+            # Generar respuestas aleatorias (37 preguntas, valores 1-10)
+            respuestas = [random.randint(1, 10) for _ in range(37)]
+            
+            # Crear resultado de test
+            ResultadoTest.objects.create(
+                postulante=postulante,
+                respuestas_detalle=respuestas,
+                scores=scores,
+                rol_principal=rol_random,
+                puntaje_total=puntaje_total
+            )
+            
+            pruebas_creadas += 1
+        
+        print(f"✅ Se crearon {pruebas_creadas} pruebas de ejemplo")
+        
+        return Response({
+            "success": True,
+            "message": f"Se generaron {pruebas_creadas} pruebas de ejemplo exitosamente",
+            "pruebas_creadas": pruebas_creadas
+        }, status=status.HTTP_200_OK)
